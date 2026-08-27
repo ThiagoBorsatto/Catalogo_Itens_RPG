@@ -1,0 +1,85 @@
+### Configuração de Variáveis Globais
+@baseUrl = http://localhost:3000/api
+@contentType = application/json
+
+### Rota principal de fallback
+GET http://localhost:3000/
+
+### Integridade do sistema (Health Check)
+GET {{baseUrl}}/health
+
+### Versão do sistema (Version Check)
+GET {{baseUrl}}/version
+
+### 1. Criar um novo item (Create)
+POST {{baseUrl}}/itens
+Content-Type: {{contentType}}
+
+{
+    "nome": "Espada Longa de Aço",
+    "tipo": "espada",
+    "raridade": "raro",
+    "poder_ataque": 45
+}
+
+### 2. Criar um segundo item para os testes de busca
+POST {{baseUrl}}/itens
+Content-Type: {{contentType}}
+
+{
+    "nome": "Escudo do Guardião",
+    "tipo": "escudo",
+    "raridade": "lendário",
+    "poder_ataque": 20
+}
+
+### 3. Criar item com raridade inválida
+POST {{baseUrl}}/itens
+Content-Type: {{contentType}}
+
+{
+    "nome": "Poção de Cura Menor",
+    "tipo": "poção",
+    "raridade": "super_mega_raro",
+    "poder_ataque": 5
+}
+
+### 4. Listar todos os itens
+GET {{baseUrl}}/itens
+
+### 5. Buscar itens por texto
+GET {{baseUrl}}/itens?search=Espada
+
+### 6. Buscar um item específico pelo ID
+GET {{baseUrl}}/itens/1
+
+### 7. Atualização Total (Update - PUT)
+PUT {{baseUrl}}/itens/1
+Content-Type: {{contentType}}
+
+{
+    "nome": "Espada Longa Flamejante",
+    "tipo": "espada",
+    "raridade": "lendário",
+    "poder_ataque": 120
+}
+
+### 8. Atualização Parcial Dinâmica
+PATCH {{baseUrl}}/itens/1
+Content-Type: {{contentType}}
+
+{
+    "poder_ataque": 150
+}
+
+### 9. Atualização Parcial
+PATCH {{baseUrl}}/itens/1
+Content-Type: {{contentType}}
+
+{
+    "nome": "Espada Longa Flamejante Aprimorada"
+}
+
+### 10. Excluir um item (Delete)
+DELETE {{baseUrl}}/itens/3
+
