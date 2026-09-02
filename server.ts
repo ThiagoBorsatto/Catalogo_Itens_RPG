@@ -167,6 +167,164 @@ app.post("/api/itens", (req, res) => {
     }
 });
 
+// UPDATE TOTAL: substitui todos os campos de um item existente
+app.put("/api/itens/:id", (req, res) => {
+    // 1. Validação do ID numérico recebido na URL
+    const id = validarId(req.params.id);
+    if (id === null) {
+        return res.status(400).json({ error: ERRO_ID });
+    }
+
+    const { nome, tipo, raridade, poder_ataque } = req.body ?? {};
+
+    // 2. Todos os campos obrigatórios passam pelas mesmas regras do POST
+    const nomeValido = validarNome(nome);
+    if (nomeValido === null) {
+        return res.status(400).json({ error: ERRO_NOME });
+    }
+
+    const tipoValido = validarTipo(tipo);
+    if (tipoValido === null) {
+        return res.status(400).json({ error: ERRO_TIPO });
+    }
+
+    const poderValido = validarPoderAtaque(poder_ataque);
+    if (poderValido === null) {
+        return res.status(400).json({ error: ERRO_PODER });
+    }
+
+    // 3. Sanitização com valor padrão para a raridade
+    const raridadeValida = normalizarRaridade(raridade);
+
+    try {
+        // 4. UPDATE utilizando Prepared Statement (?) para segurança
+        const sql =
+            "UPDATE itens SET nome = ?, tipo = ?, raridade = ?, poder_ataque = ? WHERE id = ?";
+        const resultado = db
+            .prepare(sql)
+            .run(nomeValido, tipoValido, raridadeValida, poderValido, id);
+
+        // 5. Verifica se alguma linha foi de fato modificada no banco
+        if (resultado.changes === 0) {
+            return res.status(404).json({ error: "Item não encontrado para atualização." });
+        }
+
+        // 6. Busca o item recém-atualizado para retornar no corpo da resposta (Princípio REST)
+        const itemAtualizado = db.prepare("SELECT * FROM itens WHERE id = ?").get(id);
+        return res.status(200).json(itemAtualizado);
+    } catch (erro) {
+        return res.status(500).json({ error: "Erro ao processar a atualização no banco de dados." });
+    }
+});
+
+// Erro dedicado às regras de negócio, para diferenciar 400 de 500 dentro da transação
+class ErroValidacao extends Error {}
+
+// UPDATE PARCIAL: altera apenas os campos enviados, de forma atômica (transação)
+app.patch("/api/itens/:id", (req, res) => {
+    const id = validarId(req.params.id);
+    if (id === null) {
+        return res.status(400).json({ error: ERRO_ID });
+    }
+
+    if (!req.body || Object.keys(req.body).length === 0) {
+        return res.status(400).json({ error: "Nenhum campo fornecido para atualização." });
+    }
+
+    const { nome, tipo, raridade, poder_ataque } = req.body;
+
+    try {
+        // A transação garante consistência entre a checagem de existência e o UPDATE
+        const fluxoAtualizacao = db.transaction(() => {
+            // Busca o registro atual no banco para validar a existência
+            const itemExistente = db.prepare("SELECT * FROM itens WHERE id = ?").get(id);
+            if (!itemExistente) return null;
+
+            const camposParaAtualizar: string[] = [];
+            const valoresParaAtualizar: (string | number)[] = [];
+
+            // Validação condicional: nome (se enviado)
+            if (nome !== undefined) {
+                const nomeValido = validarNome(nome);
+                if (nomeValido === null) throw new ErroValidacao(ERRO_NOME);
+                camposParaAtualizar.push("nome = ?");
+                valoresParaAtualizar.push(nomeValido);
+            }
+
+            // Validação condicional: tipo (se enviado)
+            if (tipo !== undefined) {
+                const tipoValido = validarTipo(tipo);
+                if (tipoValido === null) throw new ErroValidacao(ERRO_TIPO);
+                camposParaAtualizar.push("tipo = ?");
+                valoresParaAtualizar.push(tipoValido);
+            }
+
+            // Validação condicional: raridade (se enviada, inválida vira "comum")
+            if (raridade !== undefined) {
+                camposParaAtualizar.push("raridade = ?");
+                valoresParaAtualizar.push(normalizarRaridade(raridade));
+            }
+
+            // Validação condicional: poder_ataque (se enviado)
+            if (poder_ataque !== undefined) {
+                const poderValido = validarPoderAtaque(poder_ataque);
+                if (poderValido === null) throw new ErroValidacao(ERRO_PODER);
+                camposParaAtualizar.push("poder_ataque = ?");
+                valoresParaAtualizar.push(poderValido);
+            }
+
+            // Nenhum campo conhecido foi enviado: só vieram chaves fora da lista aceita
+            if (camposParaAtualizar.length === 0) {
+                throw new ErroValidacao(
+                    "Nenhum campo válido para atualização. Campos aceitos: nome, tipo, raridade, poder_ataque."
+                );
+            }
+
+            // Montagem segura da query dinâmica
+            const sql = `UPDATE itens SET ${camposParaAtualizar.join(", ")} WHERE id = ?`;
+            valoresParaAtualizar.push(id);
+
+            db.prepare(sql).run(...valoresParaAtualizar);
+            return db.prepare("SELECT * FROM itens WHERE id = ?").get(id);
+        });
+
+        const resultado = fluxoAtualizacao();
+
+        if (!resultado) {
+            return res.status(404).json({ error: "Item não encontrado para atualização parcial." });
+        }
+
+        return res.status(200).json(resultado);
+    } catch (erro) {
+        // Erros das regras de negócio viram 400; o resto é falha real do banco
+        if (erro instanceof ErroValidacao) {
+            return res.status(400).json({ error: erro.message });
+        }
+        return res.status(500).json({ error: "Erro ao processar a atualização parcial no banco." });
+    }
+});
+
+// DELETE: remove fisicamente um item do banco
+app.delete("/api/itens/:id", (req, res) => {
+    const id = validarId(req.params.id);
+    if (id === null) {
+        return res.status(400).json({ error: ERRO_ID });
+    }
+
+    try {
+        const resultado = db.prepare("DELETE FROM itens WHERE id = ?").run(id);
+
+        // No SQLite, o sucesso é medido pelo número de linhas afetadas (changes)
+        if (resultado.changes === 0) {
+            return res.status(404).json({ error: "Item não localizado para exclusão." });
+        }
+
+        return res.status(200).json({ message: "Item excluído do catálogo com sucesso!" });
+    } catch (erro) {
+        return res.status(500).json({ error: "Erro ao excluir o item do banco de dados." });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Servidor rodando em: http://localhost:${PORT}`);
 });
