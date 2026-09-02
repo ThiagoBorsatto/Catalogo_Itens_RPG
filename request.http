@@ -58,7 +58,7 @@ PUT {{baseUrl}}/itens/1
 Content-Type: {{contentType}}
 
 {
-    "nome": "Espada Longa Flamejante",
+    "nome": " ",
     "tipo": "espada",
     "raridade": "lendário",
     "poder_ataque": 120
