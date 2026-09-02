@@ -69,7 +69,7 @@ PATCH {{baseUrl}}/itens/1
 Content-Type: {{contentType}}
 
 {
-    "poder_ataque": 150
+    "poder_ataque": -5
 }
 
 ### 9. Atualização Parcial
@@ -81,5 +81,220 @@ Content-Type: {{contentType}}
 }
 
 ### 10. Excluir um item (Delete)
-DELETE {{baseUrl}}/itens/3
+DELETE {{baseUrl}}/itens/abc
+
+### Erro 1: Criar item com nome em branco (Deve retornar 400)
+POST {{baseUrl}}/itens
+Content-Type: {{contentType}}
+
+{
+    "nome": "   ",
+    "tipo": "espada",
+    "raridade": "comum",
+    "poder_ataque": 10
+}
+
+### Erro 2: Criar item sem o campo nome (Deve retornar 400)
+POST {{baseUrl}}/itens
+Content-Type: {{contentType}}
+
+{
+    "tipo": "escudo",
+    "poder_ataque": 10
+}
+
+### Erro 3: poder_ataque igual a zero (Deve retornar 400)
+POST {{baseUrl}}/itens
+Content-Type: {{contentType}}
+
+{
+    "nome": "Adaga Quebrada",
+    "tipo": "espada",
+    "raridade": "comum",
+    "poder_ataque": 0
+}
+
+### Erro 4: poder_ataque negativo (Deve retornar 400)
+POST {{baseUrl}}/itens
+Content-Type: {{contentType}}
+
+{
+    "nome": "Adaga Amaldiçoada",
+    "tipo": "espada",
+    "raridade": "comum",
+    "poder_ataque": -30
+}
+
+### Erro 5: poder_ataque com texto no lugar de número (Deve retornar 400)
+POST {{baseUrl}}/itens
+Content-Type: {{contentType}}
+
+{
+    "nome": "Machado Misterioso",
+    "tipo": "espada",
+    "raridade": "raro",
+    "poder_ataque": "muito forte"
+}
+
+### Erro 6: tipo fora da lista permitida (Deve retornar 400)
+POST {{baseUrl}}/itens
+Content-Type: {{contentType}}
+
+{
+    "nome": "Bazuca do Mago",
+    "tipo": "bazuca",
+    "raridade": "lendário",
+    "poder_ataque": 999
+}
+
+### Erro 7: Corpo da requisição vazio (Deve retornar 400)
+POST {{baseUrl}}/itens
+Content-Type: {{contentType}}
+
+{}
+
+### Erro 8: Buscar um ID que não existe no sistema (Deve retornar 404)
+GET {{baseUrl}}/itens/9999
+
+### Erro 9: PUT em um ID inexistente (Deve retornar 404)
+PUT {{baseUrl}}/itens/9999
+Content-Type: {{contentType}}
+
+{
+    "nome": "Item Fantasma",
+    "tipo": "espada",
+    "raridade": "comum",
+    "poder_ataque": 10
+}
+
+### Erro 10: Enviar texto no lugar de um ID numérico na URL (Deve retornar 400)
+DELETE {{baseUrl}}/itens/abc
+
+### Erro 11: PATCH com corpo vazio (Deve retornar 400)
+PATCH {{baseUrl}}/itens/1
+Content-Type: {{contentType}}
+
+{}
+
+### Erro 12: PATCH com poder_ataque inválido (Deve retornar 400)
+PATCH {{baseUrl}}/itens/1
+Content-Type: {{contentType}}
+
+{
+    "poder_ataque": -5
+}
+
+### Erro 13: DELETE em um ID inexistente (Deve retornar 404)
+DELETE {{baseUrl}}/itens/9999
+
+### Ataque 1: UNION SELECT tentando vazar a tabela de usuários
+GET {{baseUrl}}/itens?search=' UNION SELECT id, email, senha FROM usuarios --
+
+### Ataque 2: Tentativa de apagar a tabela pela URL de busca
+GET {{baseUrl}}/itens?search='; DROP TABLE itens; --
+
+### Ataque 3: Tautologia clássica para listar tudo ignorando o filtro
+GET {{baseUrl}}/itens?search=' OR '1'='1
+
+### Ataque 4: POST com DROP TABLE dentro do nome (deve gravar como texto literal, 201)
+POST {{baseUrl}}/itens
+Content-Type: {{contentType}}
+
+{
+    "nome": "Espada'); DROP TABLE itens; --",
+    "tipo": "espada",
+    "raridade": "comum",
+    "poder_ataque": 10
+}
+
+### Ataque 5: POST tentando fechar o VALUES e injetar as outras colunas (201, texto literal)
+POST {{baseUrl}}/itens
+Content-Type: {{contentType}}
+
+{
+    "nome": "Lança', 'espada', 'lendário', 99999); --",
+    "tipo": "espada",
+    "raridade": "comum",
+    "poder_ataque": 1
+}
+
+### Ataque 6: POST com comando SQL no poder_ataque (Deve retornar 400)
+POST {{baseUrl}}/itens
+Content-Type: {{contentType}}
+
+{
+    "nome": "Machado Sombrio",
+    "tipo": "espada",
+    "raridade": "comum",
+    "poder_ataque": "10; DROP TABLE itens"
+}
+
+### Ataque 7: POST com tautologia no tipo tentando furar a lista fixa (Deve retornar 400)
+POST {{baseUrl}}/itens
+Content-Type: {{contentType}}
+
+{
+    "nome": "Adaga Fantasma",
+    "tipo": "espada' OR '1'='1",
+    "raridade": "comum",
+    "poder_ataque": 10
+}
+
+### Ataque 8: PUT tentando reescrever o WHERE para afetar todas as linhas (200, texto literal)
+PUT {{baseUrl}}/itens/1
+Content-Type: {{contentType}}
+
+{
+    "nome": "Hackeado' WHERE 1=1; --",
+    "tipo": "espada",
+    "raridade": "comum",
+    "poder_ataque": 1
+}
+
+### Ataque 9: PUT com OR 1=1 no ID da URL (Deve retornar 400)
+PUT {{baseUrl}}/itens/1%20OR%201=1
+Content-Type: {{contentType}}
+
+{
+    "nome": "Atualização em Massa",
+    "tipo": "espada",
+    "raridade": "comum",
+    "poder_ataque": 1
+}
+
+### Ataque 10: PATCH tentando injetar uma segunda coluna no SET (200, texto literal)
+PATCH {{baseUrl}}/itens/1
+Content-Type: {{contentType}}
+
+{
+    "nome": "x', poder_ataque = 99999 --"
+}
+
+### Ataque 11: PATCH com nome de campo malicioso na query dinâmica (Deve retornar 400)
+PATCH {{baseUrl}}/itens/1
+Content-Type: {{contentType}}
+
+{
+    "poder_ataque = 99999, nome": "irrelevante"
+}
+
+### Ataque 12: PATCH com DROP TABLE na raridade (200, cai no padrão comum)
+PATCH {{baseUrl}}/itens/1
+Content-Type: {{contentType}}
+
+{
+    "raridade": "comum'; DROP TABLE usuarios; --"
+}
+
+### Ataque 13: DELETE com OR 1=1 no ID, tentando apagar o catálogo inteiro (Deve retornar 400)
+DELETE {{baseUrl}}/itens/1%20OR%201=1
+
+### Ataque 14: DELETE com DROP TABLE anexado no ID (Deve retornar 400)
+DELETE {{baseUrl}}/itens/1%3B%20DROP%20TABLE%20itens
+
+### Ataque 15: GET por ID com tautologia (Deve retornar 400)
+GET {{baseUrl}}/itens/1%20OR%201=1
+
+### Verificação final: a tabela itens sobreviveu a todos os ataques acima
+GET {{baseUrl}}/itens
 
