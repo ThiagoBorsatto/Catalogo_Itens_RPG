@@ -167,6 +167,56 @@ app.post("/api/itens", (req, res) => {
     }
 });
 
+// UPDATE TOTAL: substitui todos os campos de um item existente
+app.put("/api/itens/:id", (req, res) => {
+    // 1. Validação do ID numérico recebido na URL
+    const id = validarId(req.params.id);
+    if (id === null) {
+        return res.status(400).json({ error: ERRO_ID });
+    }
+
+    const { nome, tipo, raridade, poder_ataque } = req.body ?? {};
+
+    // 2. Todos os campos obrigatórios passam pelas mesmas regras do POST
+    const nomeValido = validarNome(nome);
+    if (nomeValido === null) {
+        return res.status(400).json({ error: ERRO_NOME });
+    }
+
+    const tipoValido = validarTipo(tipo);
+    if (tipoValido === null) {
+        return res.status(400).json({ error: ERRO_TIPO });
+    }
+
+    const poderValido = validarPoderAtaque(poder_ataque);
+    if (poderValido === null) {
+        return res.status(400).json({ error: ERRO_PODER });
+    }
+
+    // 3. Sanitização com valor padrão para a raridade
+    const raridadeValida = normalizarRaridade(raridade);
+
+    try {
+        // 4. UPDATE utilizando Prepared Statement (?) para segurança
+        const sql =
+            "UPDATE itens SET nome = ?, tipo = ?, raridade = ?, poder_ataque = ? WHERE id = ?";
+        const resultado = db
+            .prepare(sql)
+            .run(nomeValido, tipoValido, raridadeValida, poderValido, id);
+
+        // 5. Verifica se alguma linha foi de fato modificada no banco
+        if (resultado.changes === 0) {
+            return res.status(404).json({ error: "Item não encontrado para atualização." });
+        }
+
+        // 6. Busca o item recém-atualizado para retornar no corpo da resposta (Princípio REST)
+        const itemAtualizado = db.prepare("SELECT * FROM itens WHERE id = ?").get(id);
+        return res.status(200).json(itemAtualizado);
+    } catch (erro) {
+        return res.status(500).json({ error: "Erro ao processar a atualização no banco de dados." });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Servidor rodando em: http://localhost:${PORT}`);
 });
